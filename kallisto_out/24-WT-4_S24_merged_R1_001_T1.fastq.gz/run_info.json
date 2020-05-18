@@ -1,0 +1,9 @@
+{
+	"n_targets": 83803,
+	"n_bootstraps": 50,
+	"n_processed": 37388870,
+	"kallisto_version": "0.43.1",
+	"index_version": 10,
+	"start_time": "Tue Apr  7 21:39:00 2020",
+	"call": "kallisto quant -i /data/biorefs/reference_genomes/ensembl-release-96/danio_rerio/kallisto/Danio_rerio.GRCz11.96.cdna.primary_assembly.with_unspliced_genes.idx -o /fast/users/a1211024/sorl1_4way_6m/09_kallisto_NO_sorl1Transcripts/24-WT-4_S24_merged_R1_001_T1.fastq.gz --single -l 300 -s 60 -t 16 --fr-stranded -b 50 24-WT-4_S24_merged_R1_001_T1.fastq.gz"
+}
