@@ -49,11 +49,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # ~~ Introduction ~~
 
-Here is my final (hopefully) analysis for the *sorl1* 4-way, 6 month RNA-seq experiment. This analysis investigates the effects of the mutations V1482Afs, and R122Pfs (null) in *sorl1* on 6 month old zebrafish brains. V1482Afs models the C1478* mutation in human *SORL1* which was described in *Pottier et al. (2012)*. R122Pfs is a putative null mutation which produces a premature stop codon before any of the coding sequences which encode the functional domains of the zebrafish Sorl1 protein. The family of zebrafish in this analysis arise from a pair-mating between fish of genotypes R122Pfs/+ x V1482Afs/+. Therefore, fish in the family have genotypes R122Pfs/+ (null/+), V1482Afs/+ (EOfAD-like), R122Pfs/V1482Afs (transheterozygous) and WT (non-mutant). The family was raised together in the same tanks to reduce environmental variation. Since the family contained ~100 fish, they were distributed over 3 tanks as to not stress them by overcrowding.
+Here is my analysis for the *sorl1* 4-way, 6 month RNA-seq experiment. This analysis investigates the effects of the mutations V1482Afs, and R122Pfs (null) in *sorl1* on 6 month old zebrafish brains. V1482Afs models the C1478* mutation in human *SORL1* which was described in *Pottier et al. (2012)*. R122Pfs is a putative null mutation which produces a premature stop codon before any of the coding sequences which encode the functional domains of the zebrafish Sorl1 protein. The family of zebrafish in this analysis arise from a pair-mating between fish of genotypes R122Pfs/+ x V1482Afs/+. Therefore, fish in the family have genotypes R122Pfs/+ (null/+), V1482Afs/+ (EOfAD-like), R122Pfs/V1482Afs (transheterozygous) and +/+ (non-mutant). The family was raised together in the same tanks to reduce environmental variation. Since the family contained ~100 fish, they were distributed over 3 tanks as to not stress them by overcrowding.
 
-When the family was 6 months of age, 50 fish were sacrificed and had their brains removed. Genotyping was performed by PCR then 24 fish of equal Genotypes and sex had brain total RNA extracted and DNase I treatment. Then total RNA was sent to SAHMRI for RNA-seq (single ended, 75bp insert). The resulting fastq files were then processed using bash shell scripts to produce a counts matrix (kallisto was used to estimate transcript abundances). Kallisto settings were mean frag length = 300, sd = 60, 50 bootstraps. None of the sorl1 alternate transcripts were added to the transcriptome as sorl1 is a long gene, and kallisto couldnt tell the alternate transcripts apart, 
+When the family was 6 months of age, 50 fish were sacrificed and had their brains removed. Genotyping was performed by PCR then 24 fish of equal Genotypes and sex had brain total RNA extracted and DNase I treatment. Then total RNA was sent to SAHMRI for RNA-seq (single ended, 75bp insert). The resulting fastq files were then processed using bash scripts to produce a counts matrix (kallisto was used to estimate transcript abundances). Kallisto settings were mean frag length = 300, sd = 60, 50 bootstraps. None of the sorl1 alternate transcripts were added to the transcriptome as sorl1 is a long gene, and kallisto couldnt tell the alternate transcripts apart in the previous analysis, 
 
-## Read in gr and make annotation ojects
+## Read in genomic ranges object and make annotation ojects
 
 ```{r}
 gr <- import.gff("ftp://ftp.ensembl.org/pub/release-96/gtf/danio_rerio/Danio_rerio.GRCz11.96.gtf.gz")
@@ -111,9 +111,11 @@ mcols(grGenes) %<>%
 
 ## Metadata of samples
 
+This is the speadsheet containing all the info of the fish. 
+
 ```{r}
 meta <- read_excel("meta_4way_6m_RNA-seq.xlsx") %>% 
-  dplyr::filter(!is.na(Position)) %>% 
+  dplyr::filter(!is.na(Position)) %>% # filter out the ones i didnt use 
   dplyr::select(c(Sex, Genotype, Tank, Batch_killed, RNA_Seq_id, new_sample_id)) %>% 
   mutate(
     Sex = as.factor(Sex), 
@@ -175,7 +177,7 @@ geneDGE <-
 
 geneDGE$samples %<>% 
   rownames_to_column("sample") %>% 
-  left_join(meta, by = "sample")
+  left_join(meta, by = "sample") %>% 
 
 #Set the genotype WT as the reference level for DE analysis later
 geneDGE$samples$Genotype <- relevel(geneDGE$samples$Genotype, "WT")
@@ -221,6 +223,8 @@ geneDGE %>%
 
 ## library sizes
 
+Library sizes afer filterling lowly expressed genes. 
+
 ```{r}
 geneDGE$samples %>% 
   mutate(`Library size (millions)` = lib.size/1e6) %>% 
@@ -234,7 +238,7 @@ geneDGE$samples %>%
 
 # ~~ Principle component analysis ~~
 
-The overall similarities between samples can be visualised by principle component analysis (PCA). Some clustering of samples is observed, *i.e the V1482Afs and R122Pfs samples. However, the WT and transhets appear to be quiet variable. 
+The overall similarities between samples can be visualised by principle component analysis (PCA). Some clustering of samples is observed, *i.e the V1482Afs and R122Pfs samples. However, the WT and transhets appear to be quite variable. 
 
 ```{r}
 pca_raw <- geneDGE$counts %>% 
@@ -276,7 +280,7 @@ design <- model.matrix(~Genotype + Sex + Tank, data = geneDGE$samples) %>%
 
 ## fit object
 
-The code below fits the GLM (negative binomial variance function)
+The code below fits the GLM (negative binomial variance function).
 
 ```{r}
 fit <- geneDGE %>% 
@@ -285,6 +289,9 @@ fit <- geneDGE %>%
 ```
 
 ### toptables
+
+The code below performs the tests for differential experssion using liklihood ratio tests from `edgeR`.
+
 ```{r}
 topTables_tmm <- design %>% colnames() %>% .[2:4] %>% 
    sapply(function(x){
@@ -304,26 +311,28 @@ topTables_tmm <- design %>% colnames() %>% .[2:4] %>%
   }, simplify = FALSE)
 ```
 
-The scrollboxes below contain the entire toptables. Some DE genes are observed. 
+The scrollboxes below contain the toptables. Not very many DE genes are observed in each comparisom. 
+
 ```{r}
-# 
-# topTables_tmm$`V1482Afs/+` %>% 
-#   kable(caption = "edgeR res, V1482Afs/+ vs WT comparison") %>% 
-#   kable_styling(bootstrap_options = c("striped", "hover")) %>% 
-#   scroll_box(width = "100%", height = "30cm")
-# 
-# topTables_tmm$`R122Pfs/+` %>% 
-#   kable(caption = "edgeR res, null/+ vs WT comparison") %>% 
-#   kable_styling(bootstrap_options = c("striped", "hover")) %>% 
-#   scroll_box(width = "100%", height = "30cm")
-# 
-# topTables_tmm$trans %>% 
-#   kable(caption = "edgeR res, transhet vs WT comparison") %>% 
-#   kable_styling(bootstrap_options = c("striped", "hover")) %>% 
-#   scroll_box(width = "100%", height = "30cm")
+topTables_tmm$`V1482Afs/+` %>%
+  kable(caption = "edgeR res, V1482Afs/+ vs WT comparison") %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(width = "100%", height = "30cm")
+
+topTables_tmm$`R122Pfs/+` %>%
+  kable(caption = "edgeR res, null/+ vs WT comparison") %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(width = "100%", height = "30cm")
+
+topTables_tmm$trans %>%
+  kable(caption = "edgeR res, transhet vs WT comparison") %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(width = "100%", height = "30cm")
 ```
 
 ### Visualisation
+
+Below are some plots visualising the differential expression. 
 #### MD plots
 
 ```{r}
@@ -368,7 +377,9 @@ topTables_tmm %>%
 
 ## check for GC and length bias
 
-A ranking statistic of the sign of the logFC multiplied by the log10 of the PValue was calculated for each gene. This gives a measure of the significance and also the magnitude of change for each gene. I plotted this ranking statistic against the gc content and length of each gene to see if there are any biases observed. If there was, I would use the `cqn` normalisation method to correct for this. No apparent biases were observed, therefore `cqn` is not appropriate.
+A ranking statistic of the logFC multiplied by the log10 of the PValue was calculated for each gene. This gives a measure of the significance and also the magnitude of change for each gene. I plotted this ranking statistic against the gc content and length of each gene to see if there are any biases observed. If there was, I would use the `cqn` normalisation method to correct for this. No apparent biases were observed, therefore `cqn` is not appropriate.
+
+Note that the limits for the y axis (ranking stat) are zoomed in for visualisation purposes. 
 
 ```{r}
 topTables_tmm %>% 
@@ -1313,7 +1324,7 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 0,
-    treeheight_row = 0,
+    treeheight_row = 0,,
     show_rownames = T,
     color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100)
   )
@@ -1336,7 +1347,7 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 2,
-    treeheight_row = 15,
+    treeheight_row = 0,
     show_rownames = FALSE,
     color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100)
   )
@@ -1362,6 +1373,7 @@ RUV_k1$normalizedCounts %>%
 ggarrange(
   topTables_RUVk1 %>%
     bind_rows() %>% 
+    mutate(coef = recode(coef, `R122Pfs/+` = "null/+")) %>% 
     ggplot(aes(x = logCPM, y = logFC,  colour = DE)) +
     geom_point(
       alpha = 0.25
@@ -1379,6 +1391,7 @@ ggarrange(
   
   topTables_RUVk1 %>%
     bind_rows() %>% 
+    mutate(coef = recode(coef, `R122Pfs/+` = "null/+")) %>% 
     ggplot(aes(y = -log10(PValue), x = logFC, colour = DE)) +
     geom_point(
       alpha = 0.25
@@ -1393,7 +1406,7 @@ ggarrange(
     # ) +
     theme(legend.position = "none") +
     scale_color_manual(values = c("grey50", "red")), 
-  labels = c("B", "C"), 
+  labels = c("A", "B"), 
   legend = "bottom", 
   common.legend = TRUE
 ) +
@@ -1561,10 +1574,12 @@ dev.off()
 
 # pheatmaps showing different directions
 
+### KEGG AD
 ```{r}
 png("plots/heatmaps/kegg_ad_logFC.png", width = 5, height = 7, units = "cm", res = 300)
 topTables_RUVk1 %>% 
   bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
   dplyr::filter(gene_id %in% KEGG$KEGG_ALZHEIMERS_DISEASE) %>% 
   dplyr::select(symbol, logFC, coef) %>% 
   spread(key = "coef", value = "logFC") %>% 
@@ -1578,18 +1593,49 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 2,
-    treeheight_row = 15,
+    treeheight_row = 0,
     show_rownames = FALSE,
+    cluster_cols = FALSE, 
     color = colorRampPalette(rev(brewer.pal(n = 7, name =
 "RdBu")))(100)
   )
 dev.off()
 ```
 
+## KEGG_CITRATE_CYCLE_TCA_CYCLE 
+```{r}
+png("plots/heatmaps/kegg_TCAcycle_logFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% KEGG$KEGG_CITRATE_CYCLE_TCA_CYCLE) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "KEGG_CITRATE_CYCLE_TCA_CYCLE",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_row = 0,
+    treeheight_col= 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## KEGG_OXIDATIVE_PHOSPHORYLATION
 ```{r}
 png("plots/heatmaps/KEGG_OXIDATIVE_PHOSPHORYLATIONlogFC.png", width = 5, height = 7, units = "cm", res = 300)
 topTables_RUVk1 %>% 
   bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
   dplyr::filter(gene_id %in% KEGG$KEGG_OXIDATIVE_PHOSPHORYLATION) %>% 
   dplyr::select(symbol, logFC, coef) %>% 
   spread(key = "coef", value = "logFC") %>% 
@@ -1603,19 +1649,22 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 2,
-    treeheight_row = 15,
+    treeheight_row = 0,
     show_rownames = FALSE,
+    cluster_cols = FALSE, 
     color = colorRampPalette(rev(brewer.pal(n = 7, name =
 "RdBu")))(100)
   )
 dev.off()
 ```
 
+## KEGG_RIBOSOME
 ```{r}
-png("plots/heatmaps/KEGG_CITRATE_CYCLE_TCA_CYCLE_logFC.png", width = 5, height = 7, units = "cm", res = 300)
+png("plots/heatmaps/KEGG_RIBOSOME_logFC.png", width = 5, height = 7, units = "cm", res = 300)
 topTables_RUVk1 %>% 
   bind_rows() %>% 
-  dplyr::filter(gene_id %in% KEGG$KEGG_CITRATE_CYCLE_TCA_CYCLE) %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>%  
+  dplyr::filter(gene_id %in% KEGG$KEGG_RIBOSOME) %>% 
   dplyr::select(symbol, logFC, coef) %>% 
   spread(key = "coef", value = "logFC") %>% 
   column_to_rownames("symbol") %>% 
@@ -1623,23 +1672,26 @@ topTables_RUVk1 %>%
     border_color = NA,
     scale = "row",
     height = 5,
-    main = "KEGG_CITRATE_CYCLE_TCA_CYCLE",
+    main = "KEGG_RIBOSOME",
     fontsize = 8, 
     width = 3,
     cellwidth = 10, 
     treeheight_col = 2,
-    treeheight_row = 15,
+    treeheight_row = 0,
     show_rownames = FALSE,
+    cluster_cols = FALSE, 
     color = colorRampPalette(rev(brewer.pal(n = 7, name =
 "RdBu")))(100)
   )
 dev.off()
 ```
 
+##HALLMARK_BILE_ACID_METABOLISM
 ```{r}
 png("plots/heatmaps/HALLMARK_BILE_ACID_METABOLISM_logFC.png", width = 5, height = 7, units = "cm", res = 300)
 topTables_RUVk1 %>% 
   bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
   dplyr::filter(gene_id %in% hallmark$HALLMARK_BILE_ACID_METABOLISM) %>% 
   dplyr::select(symbol, logFC, coef) %>% 
   dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
@@ -1654,7 +1706,8 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 2,
-    treeheight_row = 15,
+    treeheight_row = 0,
+    cluster_cols = FALSE, 
     show_rownames = FALSE,
     color = colorRampPalette(rev(brewer.pal(n = 7, name =
 "RdBu")))(100)
@@ -1662,10 +1715,12 @@ topTables_RUVk1 %>%
 dev.off()
 ```
 
+## HALLMARK_ALLOGRAFT_REJECTION 
 ```{r}
 png("plots/heatmaps/HALLMARK_ALLOGRAFT_REJECTION_logFC.png", width = 5, height = 7, units = "cm", res = 300)
 topTables_RUVk1 %>% 
   bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
   dplyr::filter(gene_id %in% hallmark$HALLMARK_ALLOGRAFT_REJECTION) %>% 
   dplyr::select(symbol, logFC, coef) %>% 
   dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
@@ -1680,7 +1735,8 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 2,
-    treeheight_row = 15,
+    cluster_cols = FALSE, 
+    treeheight_row = 0,
     show_rownames = FALSE,
     color = colorRampPalette(rev(brewer.pal(n = 7, name =
 "RdBu")))(100)
@@ -1688,10 +1744,12 @@ topTables_RUVk1 %>%
 dev.off()
 ```
 
+## KEGG_HUNTINGTONS_DISEASE
 ```{r}
 png("plots/heatmaps/KEGG_HUNTINGTONS_DISEASE_logFC.png", width = 5, height = 7, units = "cm", res = 300)
 topTables_RUVk1 %>% 
   bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
   dplyr::filter(gene_id %in% KEGG$KEGG_HUNTINGTONS_DISEASE) %>% 
   dplyr::select(symbol, logFC, coef) %>% 
   dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
@@ -1706,15 +1764,303 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 2,
-    treeheight_row = 15,
+    treeheight_row = 0,
     show_rownames = FALSE,
+    cluster_cols = FALSE, 
     color = colorRampPalette(rev(brewer.pal(n = 7, name =
 "RdBu")))(100)
   )
 dev.off()
 ```
 
-## leading edge shared genes\
+## HALLMARK_IL2_STAT5_SIGNALING
+```{r}
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hallmark$HALLMARK_IL2_STAT5_SIGNALING) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "HALLMARK_IL2_STAT5_SIGNALING",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+```
+
+## KEGG_PARKINSONS_DISEASE
+```{r}
+png("plots/heatmaps/KEGG_PARKINSONS_DISEASE_logFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% KEGG$KEGG_PARKINSONS_DISEASE) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "KEGG_PARKINSONS_DISEASE",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE, 
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## HALLMARK_OXIDATIVE_PHOSPHORYLATION
+```{r}
+png("plots/heatmaps/HALLMARK_OXIDATIVE_PHOSPHORYLATIONE_logFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hallmark$HALLMARK_OXIDATIVE_PHOSPHORYLATION) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "HALLMARK_OXIDATIVE_PHOSPHORYLATION",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## HALLMARK_MTORC1_SIGNALING
+```{r}
+png("plots/heatmaps/HALLMARK_MTORC1_SIGNALING_logFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hallmark$HALLMARK_MTORC1_SIGNALING) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "HALLMARK_MTORC1_SIGNALING",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## HALLMARK_MYC_TARGETS_V1
+```{r}
+png("plots/heatmaps/HALLMARK_MYC_TARGETS_V1_logFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hallmark$HALLMARK_MYC_TARGETS_V1) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "HALLMARK_MYC_TARGETS_V1",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## KEGG_PROTEOSOME
+```{r}
+png("plots/heatmaps/KEGG_PROTEASOMElogFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% KEGG$KEGG_PROTEASOME) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "KEGG_PROTEASOME",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## KEGG GLYCOYLSIS
+```{r}
+png("plots/heatmaps/KEGG_GLYCOLYSIS_GLUCONEOGENESISlogFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% KEGG$KEGG_GLYCOLYSIS_GLUCONEOGENESIS) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "KEGG_GLYCOLYSIS_GLUCONEOGENESIS",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## Epithelial mes. transition
+```{r}
+png("plots/heatmaps/HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITIONlogFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hallmark$HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 0,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## APICAL JUNCTION
+```{r}
+png("plots/heatmaps/HALLMARK_APICAL_JUNCTIONlogFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hallmark$HALLMARK_APICAL_JUNCTION) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "HALLMARK_APICAL_JUNCTION",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 0,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+## KEGG_CELL_ADHESION_MOLECULES_CAMS
+```{r}
+png("plots/heatmaps/KEGG_CELL_ADHESION_MOLECULES_CAMS_logFC.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% KEGG$KEGG_CELL_ADHESION_MOLECULES_CAMS) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "KEGG_CELL_ADHESION_MOLECULES_CAMS",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 0,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+# leading edge shared genes
 
 ## V1482Afs
 ```{r}
@@ -1834,7 +2180,8 @@ ggarrange(
       trim = FALSE) +
     geom_boxplot(width = .4) +
     theme_bw() +
-    xlab("") +
+labs(x = "", 
+       fill = "Genotype") +
     ggtitle("Neurons"), 
 # Oligodendrocytes  
   geneDGE %>% 
@@ -1854,8 +2201,9 @@ ggarrange(
       trim = FALSE) +
     geom_boxplot(width = .4) +
     theme_bw() +
-  xlab("") +
-  ggtitle("Oligodendrocyte"), 
+labs(x = "", 
+       fill = "Genotype") +
+  ggtitle("Oligodendrocytes"), 
 #Astrocytes 
 geneDGE %>% 
   cpm(log=TRUE) %>% 
@@ -1874,7 +2222,8 @@ geneDGE %>%
       trim = FALSE) +
     geom_boxplot(width = .4) +
     theme_bw() +
-  xlab("") +
+labs(x = "", 
+       fill = "Genotype") +
     ggtitle("Astrocytes"),
   
   # microglia
@@ -1891,12 +2240,63 @@ geneDGE %>%
       alpha = 0.75, 
       trim = FALSE) +
     geom_boxplot(width = .4) +
-  xlab("") +
-    theme_bw() +
-    ggtitle("Microglia"),
-common.legend = TRUE ,
-legend = "bottom", 
+  labs(x = "", 
+       fill = "Genotype") +
+  theme_bw() +
+  ggtitle("Microglia"),
+legend = "none", 
 labels = "AUTO"
 ) +
   ggsave("plots/celltype_heatmaps/celltype_logCPM_violin.png", width = 17, height = 17, units = "cm", dpi = 200)
 ```
+
+## GC content and length plots
+
+```{r}
+ggarrange(
+  topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(rankstat = logFC*log10(PValue)) %>% 
+  ggplot(aes(x = gc_content, y = rankstat)) +
+  geom_point(
+    aes(colour = DE),
+    alpha = 0.5
+  ) +
+  geom_smooth(se = FALSE, method = "gam") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  facet_grid(rows = vars(coef)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("grey50", "red")) +
+  scale_y_continuous(limits = c(-5,5)) +
+  xlab("GC content") +
+  ylab("logFC * log10(PValue)"),
+
+
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(rankstat = logFC*log10(PValue)) %>% 
+  ggplot(aes(x = length, y = rankstat)) +
+  geom_point(
+    aes(colour = DE),
+    alpha = 0.5
+  ) +
+  geom_smooth(se = FALSE, method = "gam") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  facet_grid(rows = vars(coef)) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("grey50", "red")) +
+  scale_y_continuous(limits = c(-5,5))+
+  scale_x_log10(labels = comma) +
+  xlab("Gene length") +
+  ylab("logFC * log10(PValue)"),
+
+labels = "AUTO", 
+common.legend = TRUE, 
+legend = "bottom"
+) +
+  ggsave("plots/gc_lengthplots.png", width = 15, height = 15, units = "cm", dpi = 300)
+
+```
+
