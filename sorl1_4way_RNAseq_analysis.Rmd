@@ -1,6 +1,6 @@
 ---
-title: "sorl1 4 way analysis final"
-author: "Karissa"
+title: "sorl1 4-way analysis"
+author: "Karissa Barthelson"
 date: "15/05/2020"
 output: 
   html_document:
@@ -649,23 +649,23 @@ topTables_RUVk1 <- design_RUVk1 %>% colnames() %>% .[2:4] %>%
 # remove(topTables_RUVk1_forExport)
 ```
 
-The scrollboxes below contain the entire toptables. DE genes are observed in each comparison
+The scrollboxes below contain the entire toptables. More DE genes are observed in each comparison now. 
 
 ```{r}
-# topTables_RUVk1$`V1482Afs/+` %>% 
-#   kable(caption = "edgeR res, V1482Afs/+ vs WT comparison") %>% 
-#   kable_styling(bootstrap_options = c("striped", "hover")) %>% 
-#   scroll_box(width = "100%", height = "30cm")
-# 
-# topTables_RUVk1$`R122Pfs/+` %>% 
-#   kable(caption = "edgeR res, null/+ vs WT comparison") %>% 
-#   kable_styling(bootstrap_options = c("striped", "hover")) %>% 
-#   scroll_box(width = "100%", height = "30cm")
-# 
-# topTables_RUVk1$trans %>% 
-#   kable(caption = "edgeR res, transhet vs WT comparison") %>% 
-#   kable_styling(bootstrap_options = c("striped", "hover")) %>% 
-#   scroll_box(width = "100%", height = "30cm")
+topTables_RUVk1$`V1482Afs/+` %>%
+  kable(caption = "edgeR res, V1482Afs/+ vs WT comparison") %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(width = "100%", height = "30cm")
+
+topTables_RUVk1$`R122Pfs/+` %>%
+  kable(caption = "edgeR res, null/+ vs WT comparison") %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(width = "100%", height = "30cm")
+
+topTables_RUVk1$trans %>%
+  kable(caption = "edgeR res, transhet vs WT comparison") %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(width = "100%", height = "30cm")
 ```
 
 ### Visualisation
@@ -711,7 +711,7 @@ topTables_RUVk1 %>%
   scale_color_manual(values = c("grey50", "red"))
 ```
 
-Many more genes were detected as DE now for the sorl1 null/+ and transhet samples. Statistical evidence was only observed for one DE gene in the EOfAD-like V1482Afs/+ mutant brains, cox7a1, a gene involved in the electron transport chain. 
+Many more genes were detected as DE now for the sorl1 null/+ and transhet samples. Statistical evidence was only observed for one DE gene in the EOfAD-like V1482Afs/+ mutant brains, *cox7a1*, a gene involved in the electron transport chain. 
 
 ## check for GC and length bias
 
@@ -800,8 +800,9 @@ fryRes_RUVk1_hm <-
 fryRes_RUVk1_hm %>% 
   bind_rows() %>% 
   bind_rows(fryRes_RUVk1_kg %>% bind_rows()) %>% 
-  dplyr::filter(FDR < 0.05 | FDR.Mixed < 0.05) %>% 
-  kable() %>% 
+  arrange(PValue.Mixed) %>% 
+  head(20) %>% 
+  kable(caption = "Most significant gene sets using fry (RUV data)") %>% 
   kable_styling("basic")
 ```
 
@@ -861,7 +862,7 @@ camera_res_KEGG_RUVk1 %>%
 
 ## fgsea
 
-Finally I will look at fgsea, This is the fast implementation of GSEA. All genes are ranked by differential expression (sign(logFC) x log10(PValue)), resulting in a ranked list starting from the most upregulated genes, ending in the most downregulated genes, and unchanged genes in the middle. The fgsea uses a Kolmogorov–Smirnov-like statistc called an enrichment score (ES), that represents the amount to which  genes in a predefined geneset are overrepresented at either the start or end of the ranked list. fgsea then estimates the statistical significance of the ES. This calculation is done by a (sample or gene) permutation test in order to produce a null distribution for the ES. The P value is determined by comparison to the null distribution. 
+Finally I will look at fgsea, This is the fast implementation of GSEA. All genes are ranked by differential expression (sign(logFC) x log10(PValue)), resulting in a ranked list starting from the most upregulated genes, ending in the most downregulated genes, and unchanged genes in the middle. The fgsea uses a Kolmogorov–Smirnov-like statistc called an enrichment score (ES), that represents the amount to which  genes in a predefined geneset are overrepresented at either the start or end of the ranked list. fgsea then estimates the statistical significance of the ES. This calculation is done by a gene permutations in order to produce a null distribution for the ES. The P value is determined by comparison to the null distribution. 
 Note that fgsea is quite naive in that it does not account for inter-gene correlation, therefore it will likely show false positives due to the nature of the permutations it performs. 
 
 ```{r}
@@ -937,8 +938,7 @@ fgseaRes_RUVk1_hm %>%
 
 Significant gene sets were only observed in the transhet for fry (probably the most correct method with the best power). Some siginicant gene sets were observed for the V1482Afs and null samples in the fgsea algorithm after bonferroni adjustment (which is a very strict threshold), so there may be something there. 
 
-Next, i will perform a meta analysis of the gseas by calculating the harmonic mean p value. This method corrects for the strong-sense family-wise error rate, and states whether groups of *dependent* p values are statistically significant. 
-
+Next, i will perform a meta analysis of the GSEAs by calculating the harmonic mean p value. This method corrects for the strong-sense family-wise error rate, and states whether groups of *dependent* p values are statistically significant. 
 
 ```{r}
 harmonicPvals_hm <- 
@@ -1080,66 +1080,6 @@ harmonicPvals_hm %>%
   scale_color_manual(values = c("grey30", "turquoise3")) +
   ggsave("plots/dotplotbySignifin.png", width = 40, units = "cm")
 ```
-
-### pheatmaps
-```{r}
-topTables_RUVk1 %>% 
-  bind_rows() %>% 
-  dplyr::filter(gene_id %in% hallmark$HALLMARK_OXIDATIVE_PHOSPHORYLATION) %>% 
-  dplyr::select(symbol, logFC, coef) %>% 
-  spread(key = "coef", value = "logFC") %>% 
-  column_to_rownames("symbol") %>% 
-  pheatmap(
-    border_color = NA,
-    scale = "row",
-    clustering_method = "average",
-    cutree_rows = 5,
-    height = 6,
-    width = 3,
-    color = colorRampPalette(rev(brewer.pal(n = 7, name =
-"RdBu")))(100)
-  )
-```
-
-```{r}
-topTables_RUVk1 %>% 
-  bind_rows() %>% 
-  dplyr::filter(gene_id %in% KEGG$KEGG_RIBOSOME) %>% 
-  dplyr::select(symbol, logFC, coef) %>% 
-  spread(key = "coef", value = "logFC") %>% 
-  column_to_rownames("symbol") %>% 
-  pheatmap(
-    border_color = NA,
-    scale = "row",
-    clustering_method = "average",
-    cutree_rows = 5,
-    height = 6,
-    width = 3,
-    color = colorRampPalette(rev(brewer.pal(n = 7, name =
-"RdBu")))(100)
-  )
-```
-
-```{r}
-topTables_RUVk1 %>% 
-  bind_rows() %>% 
-  dplyr::filter(gene_id %in% hallmark$HALLMARK_MTORC1_SIGNALING) %>% 
-  dplyr::select(symbol, logFC, coef) %>% 
-  spread(key = "coef", value = "logFC") %>% 
-  column_to_rownames("symbol") %>% 
-  pheatmap(
-    border_color = NA,
-    scale = "row",
-    clustering_method = "ward",
-    cutree_rows = 5,
-    height = 6,
-    width = 3,
-    color = colorRampPalette(rev(brewer.pal(n = 7, name =
-"PiYG")))(100)
-  )
-```
-
-
 
 # ~~ GSEA IRE with RUV k = 1 ~~ 
 
@@ -1324,7 +1264,7 @@ topTables_RUVk1 %>%
     width = 3,
     cellwidth = 10, 
     treeheight_col = 0,
-    treeheight_row = 0,,
+    treeheight_row = 0,
     show_rownames = T,
     color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100)
   )
@@ -1353,19 +1293,9 @@ topTables_RUVk1 %>%
   )
 ```
 
-## PCA of IRE 3'
-```{r}
-RUV_k1$normalizedCounts %>% 
-  cpm(log = TRUE) %>% 
-  as.data.frame() %>% 
-  rownames_to_column("gene_id")
-  t() %>% 
-  prcomp() %>% 
-  .$x
-```
-
-
 # ~~ plots for publication ~~
+
+Below is some code for generating the plots in the paper. 
 
 ## DE analysis
 
@@ -1415,7 +1345,6 @@ ggarrange(
 
 ## venn diagram
 ```{r}
-
 venn.diagram(
   list(`null/+` = topTables_RUVk1$`R122Pfs/+` %>% 
          dplyr::filter(DE == T) %>% 
