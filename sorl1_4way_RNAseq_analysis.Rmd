@@ -27,7 +27,6 @@ library(fgsea)
 library(RUVSeq)
 library(ngsReports)
 library(metap)
-library(cqn)
 library(harmonicmeanp)
 library(ggpubr)
 library(RColorBrewer)
@@ -51,7 +50,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Here is my analysis for the *sorl1* 4-way, 6 month RNA-seq experiment. This analysis investigates the effects of the mutations V1482Afs, and R122Pfs (null) in *sorl1* on 6 month old zebrafish brains. V1482Afs models the C1478* mutation in human *SORL1* which was described in *Pottier et al. (2012)*. R122Pfs is a putative null mutation which produces a premature stop codon before any of the coding sequences which encode the functional domains of the zebrafish Sorl1 protein. The family of zebrafish in this analysis arise from a pair-mating between fish of genotypes R122Pfs/+ x V1482Afs/+. Therefore, fish in the family have genotypes R122Pfs/+ (null/+), V1482Afs/+ (EOfAD-like), R122Pfs/V1482Afs (transheterozygous) and +/+ (non-mutant). The family was raised together in the same tanks to reduce environmental variation. Since the family contained ~100 fish, they were distributed over 3 tanks as to not stress them by overcrowding.
 
-When the family was 6 months of age, 50 fish were sacrificed and had their brains removed. Genotyping was performed by PCR then 24 fish of equal Genotypes and sex had brain total RNA extracted and DNase I treatment. Then total RNA was sent to SAHMRI for RNA-seq (single ended, 75bp insert). The resulting fastq files were then processed using bash scripts to produce a counts matrix (kallisto was used to estimate transcript abundances). Kallisto settings were mean frag length = 300, sd = 60, 50 bootstraps. None of the sorl1 alternate transcripts were added to the transcriptome as sorl1 is a long gene, and kallisto couldnt tell the alternate transcripts apart in the previous analysis, 
+When the family was 6 months of age, 50 fish were sacrificed and had their brains removed. Genotyping was performed by PCR then 24 fish of equal Genotypes and sex had brain total RNA extracted and DNase I treatment. Then total RNA was sent to SAHMRI for RNA-seq (single ended, 75bp insert). The resulting fastq files were then processed using bash scripts to produce a counts matrix (kallisto was used to estimate transcript abundances). Kallisto settings were mean frag length = 300, sd = 60, 50 bootstraps. None of the sorl1 alternate transcripts were added to the transcriptome as *sorl1* is a long gene, and kallisto couldnt tell the alternate transcripts apart in a previous draft analysis, 
 
 ## Read in genomic ranges object and make annotation ojects
 
@@ -177,7 +176,7 @@ geneDGE <-
 
 geneDGE$samples %<>% 
   rownames_to_column("sample") %>% 
-  left_join(meta, by = "sample") %>% 
+  left_join(meta, by = "sample") 
 
 #Set the genotype WT as the reference level for DE analysis later
 geneDGE$samples$Genotype <- relevel(geneDGE$samples$Genotype, "WT")
@@ -268,10 +267,6 @@ Here, I will use the generalised linear model functionality of edgeR and likliho
 Design matrix is shown below. WT is set as the intercept (i.e. the reference level). 
 
 ```{r}
-
-design <-
-  #Set the genotype WT as the reference level for DE analysis later
-geneDGE$samples$Genotype <- relevel(geneDGE$samples$Genotype, "WT")
 
 #design with WT as the intercept
 design <- model.matrix(~Genotype + Sex + Tank, data = geneDGE$samples) %>% 
@@ -425,11 +420,11 @@ Here, I will perform `FRY` on the HALLMARK and KEGG pathway gene sets which were
 ## Read in gene sets 
 ```{r}
 # need the zf2human gene mapping file from my W1818x RNA-seq analysis
-zf2humangeneMapping <-  read_delim("~/Box Sync/20181113_MorganLardelli_mRNASeq-master/R/zf2human_entrez.txt",delim =  ",") %>% 
+zf2humangeneMapping <-  read_delim("gene_sets/zf2human_entrez.txt",delim =  ",") %>% 
 	set_colnames(c("hu_gene_id", "hu_gene_name", "Entrez", "gene_id", "gene_name"))
 
 # import KEGG gene sets
-KEGG <- gmtPathways("~/Documents/20190129_Lardelli_FMR1_RNASeq/ext_data/c2.cp.kegg.v7.1.entrez.gmt")
+KEGG <- gmtPathways("gene_sets/c2.cp.kegg.v7.1.entrez.gmt")
 
 KEGG %<>% 	
   lapply(function(x){
@@ -452,7 +447,7 @@ KEGG <- KEGG[KEGG_sizes %>% dplyr::filter(n_genes > 10) %>% .$pathway]
 
 # Hallmark gene sets
 
-hallmark <- gmtPathways("~/Documents/20190129_Lardelli_FMR1_RNASeq/ext_data/h.all.v7.1.entrez.gmt") %>%
+hallmark <- gmtPathways("gene_sets/h.all.v7.1.entrez.gmt") %>%
   lapply(function(x){
     zf2humangeneMapping %>%
       dplyr::filter(Entrez %in% x, 
@@ -652,20 +647,20 @@ topTables_RUVk1 <- design_RUVk1 %>% colnames() %>% .[2:4] %>%
 The scrollboxes below contain the entire toptables. More DE genes are observed in each comparison now. 
 
 ```{r}
-topTables_RUVk1$`V1482Afs/+` %>%
-  kable(caption = "edgeR res, V1482Afs/+ vs WT comparison") %>%
-  kable_styling(bootstrap_options = c("striped", "hover")) %>%
-  scroll_box(width = "100%", height = "30cm")
-
-topTables_RUVk1$`R122Pfs/+` %>%
-  kable(caption = "edgeR res, null/+ vs WT comparison") %>%
-  kable_styling(bootstrap_options = c("striped", "hover")) %>%
-  scroll_box(width = "100%", height = "30cm")
-
-topTables_RUVk1$trans %>%
-  kable(caption = "edgeR res, transhet vs WT comparison") %>%
-  kable_styling(bootstrap_options = c("striped", "hover")) %>%
-  scroll_box(width = "100%", height = "30cm")
+# topTables_RUVk1$`V1482Afs/+` %>%
+#   kable(caption = "edgeR res, V1482Afs/+ vs WT comparison") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover")) %>%
+#   scroll_box(width = "100%", height = "30cm")
+# 
+# topTables_RUVk1$`R122Pfs/+` %>%
+#   kable(caption = "edgeR res, null/+ vs WT comparison") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover")) %>%
+#   scroll_box(width = "100%", height = "30cm")
+# 
+# topTables_RUVk1$trans %>%
+#   kable(caption = "edgeR res, transhet vs WT comparison") %>%
+#   kable_styling(bootstrap_options = c("striped", "hover")) %>%
+#   scroll_box(width = "100%", height = "30cm")
 ```
 
 ### Visualisation
@@ -1090,7 +1085,7 @@ fry, camera, mroast and fgsea are the GSEA algorithms,
 ## import the gene sets
 
 ```{r}
-zebrafishIreGenes <- readRDS("~/Box Sync/SORL1 Project/4way_RNA_seq_6m/iron_enrichment/Res from Nhi/zebrafishIreGenes.rds")
+zebrafishIreGenes <- readRDS("gene_sets/zebrafishIreGenes.rds")
 ```
 
 ## GSEAs
@@ -1163,7 +1158,7 @@ fgseaRes_ire_RUV <- ranks_fgseaRUVk1 %>%
   lapply(function(x){
     fgsea(stats = x, 
           pathways = zebrafishIreGenes, 
-          nperm = 1e6, 
+          nperm = 1e5, 
           nproc = 1) %>% 
       as_tibble() %>%
       dplyr::rename(FDR = padj) %>%
@@ -1292,6 +1287,150 @@ topTables_RUVk1 %>%
     color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100)
   )
 ```
+
+# ~~ GSEA HIF Targets ~~
+
+```{r}
+hifTargets <- list(
+  GROSS_HYPOXIA_VIA_HIF1A_DN = gmtPathways("gene_sets/GROSS_HYPOXIA_VIA_HIF1A_DN.gmt") %>% 
+    as.data.frame() %>% 
+    set_colnames("hu_gene_name") %>% 
+    left_join(zf2humangeneMapping) %>% 
+    na.omit() %>% 
+    .$gene_id, 
+  GROSS_HYPOXIA_VIA_HIF1A_UP = gmtPathways("gene_sets/GROSS_HYPOXIA_VIA_HIF1A_UP.gmt") %>% 
+    as.data.frame() %>% 
+    set_colnames("hu_gene_name") %>% 
+    left_join(zf2humangeneMapping) %>% 
+    na.omit() %>% 
+    .$gene_id
+)
+```
+
+```{r}
+fry_Res_HIF <- design_RUVk1 %>% colnames() %>% .[2:4] %>% 
+  sapply(function(x) {
+    RUV_k1$normalizedCounts %>% 
+      cpm(log = T) %>% 
+      fry(
+        index = hifTargets,
+        design = design_RUVk1, 
+        contrast = x, 
+        sort = "directional"
+      ) %>% 
+      rownames_to_column("pathway") %>% 
+      as_tibble() %>% 
+      mutate(coef = x, 
+             )
+  }, simplify = FALSE)
+```
+
+```{r}
+cameraRes_HIF <- design_RUVk1 %>% colnames() %>% .[2:4] %>% 
+  sapply(function(x) {
+    RUV_k1$normalizedCounts %>% 
+      cpm(log = TRUE) %>% 
+      camera(
+        index = hifTargets,
+        design = design_RUVk1, 
+        contrast = x, 
+        inter.gene.cor = NA, 
+        sort = TRUE
+      ) %>% 
+      rownames_to_column("pathway") %>% 
+      as_tibble() %>% 
+      mutate(coef = x)
+  }, simplify = FALSE)
+```
+
+```{r}
+fgseaRes_HIF <- ranks_fgseaRUVk1 %>% 
+  lapply(function(x){
+    fgsea(stats = x, 
+          pathways = hifTargets, 
+          nperm = 1e5, 
+          nproc = 1) %>% 
+      as_tibble() %>%
+      dplyr::rename(FDR = padj) %>%
+      mutate(padj = p.adjust(pval, "bonferroni")) %>%
+      dplyr::select(pathway, pval, FDR, padj, everything()) %>%
+      arrange(pval) %>%
+      mutate(sig = padj < 0.05)
+  })
+
+fgseaRes_HIF$`R122Pfs/+` %<>% 
+  mutate(coef = "R122Pfs/+")
+
+fgseaRes_HIF$trans %<>% 
+  mutate(coef = "trans")
+
+fgseaRes_HIF$`V1482Afs/+` %<>% 
+  mutate(coef = "V1482Afs/+")
+```
+
+```{r}
+fry_Res_HIF%>% 
+  bind_rows() %>% 
+  dplyr::select(pathway, PValue.Mixed, coef) %>% 
+  dplyr::rename(fry_p = PValue.Mixed) %>% 
+  left_join(cameraRes_HIF %>% 
+              bind_rows() %>% 
+              dplyr::select(pathway, PValue, coef), 
+            by = c("pathway", "coef")) %>% 
+  dplyr::rename(camera_p = PValue) %>% 
+  left_join(fgseaRes_HIF %>% 
+              bind_rows() %>% 
+              dplyr::select(pathway, pval, coef), 
+            by = c("pathway", "coef")) %>% 
+  dplyr::rename(fgsea_p = pval) %>% 
+  bind_rows() %>% 
+  nest(p = one_of(c("fry_p", "camera_p", "fgsea_p"))) %>% 
+  mutate(
+    harmonic_p = vapply(p, function(x){
+      x <- unlist(x)
+      x <- x[!is.na(x)]
+      p.hmp(x, L = 3)
+    }, numeric(1))
+  ) %>% 
+  unnest() %>% 
+  mutate(harmonic_p_FDR = p.adjust(harmonic_p, "fdr"), 
+         sig = harmonic_p_FDR < 0.05) %>% 
+  arrange(harmonic_p_FDR)
+```
+
+```{r}
+png("plots/heatmaps/GROSS_HYPOXIA_DN.png", width = 5, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hifTargets$GROSS_HYPOXIA_VIA_HIF1A_DN) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "row",
+    height = 5,
+    main = "GROSS_HYPOXIA_VIA_HIF1A_DN",
+    fontsize = 8, 
+    width = 3,
+    cellwidth = 10, 
+    treeheight_col = 2,
+    treeheight_row = 0,
+    show_rownames = FALSE,
+    cluster_cols = FALSE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+
+
+
+
+
+
 
 # ~~ plots for publication ~~
 
@@ -2197,7 +2336,7 @@ ggarrange(
   theme_bw() +
   theme(legend.position = "none") +
   scale_color_manual(values = c("grey50", "red")) +
-  scale_y_continuous(limits = c(-5,5)) +
+  coord_cartesian(ylim = c(-2,2)) +
   xlab("GC content") +
   ylab("logFC * log10(PValue)"),
 
@@ -2216,7 +2355,7 @@ topTables_RUVk1 %>%
   theme_bw() +
   theme(legend.position = "none") +
   scale_color_manual(values = c("grey50", "red")) +
-  scale_y_continuous(limits = c(-5,5))+
+  coord_cartesian(ylim = c(-5,5))+
   scale_x_log10(labels = comma) +
   xlab("Gene length") +
   ylab("logFC * log10(PValue)"),
@@ -2224,8 +2363,14 @@ topTables_RUVk1 %>%
 labels = "AUTO", 
 common.legend = TRUE, 
 legend = "bottom"
-) +
+) 
   ggsave("plots/gc_lengthplots.png", width = 15, height = 15, units = "cm", dpi = 300)
 
+```
+
+## Session info
+
+```{r}
+sessionInfo()
 ```
 
