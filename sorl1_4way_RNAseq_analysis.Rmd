@@ -1369,7 +1369,7 @@ fgseaRes_HIF$`V1482Afs/+` %<>%
 ```
 
 ```{r}
-fry_Res_HIF%>% 
+harmonic_p_HIF <- fry_Res_HIF%>% 
   bind_rows() %>% 
   dplyr::select(pathway, PValue.Mixed, coef) %>% 
   dplyr::rename(fry_p = PValue.Mixed) %>% 
@@ -2323,50 +2323,222 @@ labels = "AUTO"
 ```{r}
 ggarrange(
   topTables_RUVk1 %>% 
-  bind_rows() %>% 
-  mutate(rankstat = logFC*log10(PValue)) %>% 
-  ggplot(aes(x = gc_content, y = rankstat)) +
-  geom_point(
-    aes(colour = DE),
-    alpha = 0.5
-  ) +
-  geom_smooth(se = FALSE, method = "gam") +
-  geom_hline(yintercept = 0, linetype = 2) +
-  facet_grid(rows = vars(coef)) +
-  theme_bw() +
-  theme(legend.position = "none") +
-  scale_color_manual(values = c("grey50", "red")) +
-  coord_cartesian(ylim = c(-2,2)) +
-  xlab("GC content") +
-  ylab("logFC * log10(PValue)"),
-
-
-topTables_RUVk1 %>% 
-  bind_rows() %>% 
-  mutate(rankstat = logFC*log10(PValue)) %>% 
-  ggplot(aes(x = length, y = rankstat)) +
-  geom_point(
-    aes(colour = DE),
-    alpha = 0.5
-  ) +
-  geom_smooth(se = FALSE, method = "gam") +
-  geom_hline(yintercept = 0, linetype = 2) +
-  facet_grid(rows = vars(coef)) +
-  theme_bw() +
-  theme(legend.position = "none") +
-  scale_color_manual(values = c("grey50", "red")) +
-  coord_cartesian(ylim = c(-5,5))+
-  scale_x_log10(labels = comma) +
-  xlab("Gene length") +
-  ylab("logFC * log10(PValue)"),
-
+    bind_rows() %>% 
+    mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+    mutate(rankstat = logFC*log10(PValue)) %>% 
+    ggplot(aes(x = gc_content, y = rankstat)) +
+    geom_point(
+      aes(colour = DE),
+      alpha = 0.5
+    ) +
+    geom_smooth(se = FALSE, method = "gam") +
+    geom_hline(yintercept = 0, linetype = 2) +
+    facet_grid(rows = vars(coef)) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    scale_color_manual(values = c("grey50", "red")) +
+    coord_cartesian(ylim = c(-5,5)) +
+    labs( x = "GC content (%)", 
+          y = "logFC * log10(PValue)",
+          colour = "Differentially expressed?"),
+  
+  
+  topTables_RUVk1 %>% 
+    bind_rows() %>% 
+    mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+    mutate(rankstat = logFC*log10(PValue)) %>% 
+    ggplot(aes(x = length, y = rankstat)) +
+    geom_point(
+      aes(colour = DE),
+      alpha = 0.5
+    ) +
+    geom_smooth(se = FALSE, method = "gam") +
+    geom_hline(yintercept = 0, linetype = 2) +
+    facet_grid(rows = vars(coef)) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    scale_color_manual(values = c("grey50", "red")) +
+    coord_cartesian(ylim = c(-5,5))+
+    scale_x_log10(labels = comma) +
+    labs( x = "Gene Length (bp)", 
+          y = "logFC * log10(PValue)",
+          colour = "Differentially expressed?"),
+  
 labels = "AUTO", 
 common.legend = TRUE, 
 legend = "bottom"
-) 
+) +
   ggsave("plots/gc_lengthplots.png", width = 15, height = 15, units = "cm", dpi = 300)
 
 ```
+
+## PCA plots
+```{r}
+ggarrange(
+  pca_raw %>% 
+    autoplot(
+      data = tibble(sample = rownames(.$x)) %>%
+        left_join(geneDGE$samples),
+      colour = "Genotype_forPub", 
+      shape = "Sex", 
+      size = 4
+    ) +
+    labs(colour = "Genotype") +
+    theme_bw(), 
+  
+  pca_raw$x %>% 
+    as.data.frame() %>% 
+    rownames_to_column("sample") %>% 
+    left_join(geneDGE$samples) %>% 
+    mutate(lib.size = lib.size/1e6) %>% 
+    ggplot(aes(x = PC1, y = lib.size, colour = Genotype_forPub, shape = Sex)) +
+    geom_point(size = 4) +
+    theme_bw() +
+    labs(
+      x = "PC1 (54.55%)", 
+      y = "Library size (millions)", 
+      colour = "Genotype"
+    ),
+  
+  pca_RUV_k1 %>% 
+    autoplot(
+      data = tibble(sample = rownames(.$x)) %>%
+        left_join(geneDGE$samples),
+      colour = "Genotype_forPub", 
+      shape = "Sex", 
+      size = 4
+    ) +
+    labs(colour = "Genotype") +
+    theme_bw() ,
+  
+  pca_RUV_k1$x %>% 
+    as.data.frame() %>% 
+    rownames_to_column("sample") %>% 
+    left_join(geneDGE$samples) %>% 
+    mutate(lib.size = lib.size/1e6) %>% 
+    ggplot(aes(x = PC1, y = lib.size, colour = Genotype_forPub, shape = Sex)) +
+    geom_point(size = 4) +
+    theme_bw() +
+    labs(
+      x = "PC1 (54.55%)", 
+      y = "Library size (millions)", 
+      colour = "Genotype"
+    ),
+  
+  labels = "AUTO", 
+  common.legend = TRUE, 
+  legend = "bottom") +
+  ggsave("plots/PCA_all_v1.png", width = 18, height = 18, units = "cm", dpi = 300)
+```
+
+## IRE Figure
+
+```{r}
+ggarrange(
+  harmonic_p_ire_RUV %>% 
+    mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+    mutate(
+      pathway = case_when(
+        pathway == "ire5_hq" ~ "Canonical 5' IRE", 
+        pathway == "ire5_all" ~ "All predicted 5' IRE", 
+        pathway == "ire3_hq" ~ "Canonical 3' IRE", 
+        pathway == "ire3_all" ~ "All predicted 3' IRE"
+      )
+    ) %>% 
+    ggplot(aes(pathway, -log10(harmonic_p), fill = sig)) +
+    geom_col() +
+    facet_wrap(~coef) +
+    coord_flip() +
+    labs(
+      x = "", 
+      fill = "Harmonic mean p-value\n< 0.05 after FDR adjustment?"
+    ) +
+    scale_fill_manual(values = c("grey50", "turquoise3")) +
+    theme_bw() +
+    theme(strip.text = element_text(size = 8)) ,
+
+harmonic_p_HIF %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  mutate(pathway = case_when(
+      pathway == "GROSS_HYPOXIA_VIA_HIF1A_DN" ~ "HIF1 targets down", 
+      pathway == "GROSS_HYPOXIA_VIA_HIF1A_UP" ~ "HIF1 targets up")
+  ) %>% 
+  ggplot(aes(pathway, -log10(harmonic_p), fill = sig)) +
+  geom_col() +
+  facet_wrap(~coef) +
+  coord_flip() +
+  labs(
+      x = "", 
+      fill = "Harmonic mean p-value\n< 0.05 after FDR adjustment?"
+    ) +
+  scale_fill_manual(values = c("grey50", "turquoise3")) +
+  theme_bw() +
+  theme(strip.text = element_text(size = 8)) , 
+labels = "AUTO", 
+common.legend = TRUE, 
+legend = "bottom", 
+ncol = 2
+) +
+  ggsave("plots/IRE_HIF.png", width = 22, height = 8, units = "cm", dpi = 300)
+```
+
+```{r}
+png("plots/IRE_heatmaps/3_IRE_All.png", width = 27, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% zebrafishIreGenes$ire3_hq) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  t() %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "column",
+    height = 5,
+    cellheight = 10,
+    main = "Canonical 3' IRE",
+    fontsize = 8, 
+    width = 15,
+    treeheight_col = 0,
+    treeheight_row = 0,
+    show_colnames = T,
+    cluster_cols = TRUE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+
+png("plots/IRE_heatmaps/3_HIFTargets_DN.png", width = 27, height = 7, units = "cm", res = 300)
+topTables_RUVk1 %>% 
+  bind_rows() %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  dplyr::filter(gene_id %in% hifTargets$GROSS_HYPOXIA_VIA_HIF1A_DN) %>% 
+  dplyr::select(symbol, logFC, coef) %>% 
+  dplyr::distinct(symbol, coef, .keep_all = TRUE) %>% 
+  spread(key = "coef", value = "logFC") %>% 
+  column_to_rownames("symbol") %>% 
+  t() %>% 
+  pheatmap(
+    border_color = NA,
+    scale = "column",
+    height = 5,
+    cellheight = 10,
+    main = "HIF1 targets down",
+    fontsize = 8, 
+    width = 15,
+    treeheight_col = 0,
+    treeheight_row = 0,
+    show_rownames = TRUE,
+    cluster_cols = TRUE, 
+    color = colorRampPalette(rev(brewer.pal(n = 7, name =
+"RdBu")))(100)
+  )
+dev.off()
+```
+
+
 
 ## Session info
 
