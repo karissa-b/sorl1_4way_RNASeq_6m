@@ -156,6 +156,11 @@ colnames(counts$counts) %<>%
   str_replace_all(pattern = "^(0|1|2).-", replacement = "") %>%
   str_replace_all(pattern = "_T1.fastq.gz", replacement = "")
 
+counts$counts %>% 
+  as.data.frame() %>% 
+  rownames_to_column("ensembl_transcript_id") %>% 
+  write_csv("catchKallisto_output.csv")
+
 geneDGE <-
   counts$counts %>%
   as.data.frame() %>%
@@ -1442,7 +1447,8 @@ Below is some code for generating the plots in the paper.
 ggarrange(
   topTables_RUVk1 %>%
     bind_rows() %>% 
-    mutate(coef = recode(coef, `R122Pfs/+` = "null/+")) %>% 
+    mutate(coef = recode(coef, `R122Pfs/+` = "null/+"), 
+           coef = recode(coef, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     ggplot(aes(x = logCPM, y = logFC,  colour = DE)) +
     geom_point(
       alpha = 0.25
@@ -1456,15 +1462,18 @@ ggarrange(
     #   size = 2.5
     # ) +
     theme(legend.position = "none") +
+    labs(colour = "Differentially expressed?") +
     scale_color_manual(values = c("grey50", "red")),
   
   topTables_RUVk1 %>%
     bind_rows() %>% 
-    mutate(coef = recode(coef, `R122Pfs/+` = "null/+")) %>% 
+    mutate(coef = recode(coef, `R122Pfs/+` = "null/+"), 
+           coef = recode(coef, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     ggplot(aes(y = -log10(PValue), x = logFC, colour = DE)) +
     geom_point(
       alpha = 0.25
     ) +
+    labs(colour = "Differentially expressed?") +
     facet_grid(rows = vars(coef)) +
     theme_bw() +
     # geom_label_repel(
@@ -1647,7 +1656,8 @@ dev.off()
 png("plots/heatmaps/kegg_ad_logFC.png", width = 5, height = 7, units = "cm", res = 300)
 topTables_RUVk1 %>% 
   bind_rows() %>% 
-  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+  mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+"), 
+           coef = recode(coef, `V1482Afs/+` = "EOfAD-like/+")) %>% 
   dplyr::filter(gene_id %in% KEGG$KEGG_ALZHEIMERS_DISEASE) %>% 
   dplyr::select(symbol, logFC, coef) %>% 
   spread(key = "coef", value = "logFC") %>% 
@@ -2241,6 +2251,7 @@ ggarrange(
     ) %>% 
     gather(key = "sample", value = "logCPM", colnames(geneDGE)) %>% 
     left_join(geneDGE$samples) %>% 
+    mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     ggplot(aes(x = Genotype_forPub, y = logCPM)) +
     geom_violin(
       aes(fill = Genotype_forPub),
@@ -2262,6 +2273,7 @@ labs(x = "",
     ) %>% 
     gather(key = "sample", value = "logCPM", colnames(geneDGE)) %>% 
     left_join(geneDGE$samples) %>% 
+  mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     ggplot(aes(x = Genotype_forPub, y = logCPM)) +
     geom_violin(
       aes(fill = Genotype_forPub),
@@ -2283,6 +2295,7 @@ geneDGE %>%
     ) %>% 
     gather(key = "sample", value = "logCPM", colnames(geneDGE)) %>% 
     left_join(geneDGE$samples) %>% 
+  mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     ggplot(aes(x = Genotype_forPub, y = logCPM)) +
     geom_violin(
       aes(fill = Genotype_forPub),
@@ -2302,6 +2315,7 @@ labs(x = "",
     dplyr::filter(gene_id %in% microglia) %>% 
     gather(key = "sample", value = "logCPM", colnames(geneDGE)) %>% 
     left_join(geneDGE$samples) %>% 
+  mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     ggplot(aes(x = Genotype_forPub, y = logCPM)) +
     geom_violin(
       aes(fill = Genotype_forPub),
@@ -2324,7 +2338,8 @@ labels = "AUTO"
 ggarrange(
   topTables_RUVk1 %>% 
     bind_rows() %>% 
-    mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+    mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+"), 
+           coef = dplyr::recode(coef, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     mutate(rankstat = logFC*log10(PValue)) %>% 
     ggplot(aes(x = gc_content, y = rankstat)) +
     geom_point(
@@ -2345,7 +2360,8 @@ ggarrange(
   
   topTables_RUVk1 %>% 
     bind_rows() %>% 
-    mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+")) %>% 
+    mutate(coef = dplyr::recode(coef, `R122Pfs/+` = "null/+"), 
+           coef = dplyr::recode(coef, `V1482Afs/+` = "EOfAD-like/+")) %>% 
     mutate(rankstat = logFC*log10(PValue)) %>% 
     ggplot(aes(x = length, y = rankstat)) +
     geom_point(
@@ -2378,7 +2394,9 @@ ggarrange(
   pca_raw %>% 
     autoplot(
       data = tibble(sample = rownames(.$x)) %>%
-        left_join(geneDGE$samples),
+        left_join(geneDGE$samples %>% 
+                    mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+"))
+                  ),
       colour = "Genotype_forPub", 
       shape = "Sex", 
       size = 4
@@ -2389,7 +2407,9 @@ ggarrange(
   pca_raw$x %>% 
     as.data.frame() %>% 
     rownames_to_column("sample") %>% 
-    left_join(geneDGE$samples) %>% 
+     left_join(geneDGE$samples %>% 
+                    mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+"))
+                  ) %>% 
     mutate(lib.size = lib.size/1e6) %>% 
     ggplot(aes(x = PC1, y = lib.size, colour = Genotype_forPub, shape = Sex)) +
     geom_point(size = 4) +
@@ -2403,7 +2423,9 @@ ggarrange(
   pca_RUV_k1 %>% 
     autoplot(
       data = tibble(sample = rownames(.$x)) %>%
-        left_join(geneDGE$samples),
+         left_join(geneDGE$samples %>% 
+                    mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+"))
+                  ),
       colour = "Genotype_forPub", 
       shape = "Sex", 
       size = 4
@@ -2414,7 +2436,9 @@ ggarrange(
   pca_RUV_k1$x %>% 
     as.data.frame() %>% 
     rownames_to_column("sample") %>% 
-    left_join(geneDGE$samples) %>% 
+     left_join(geneDGE$samples %>% 
+                    mutate(Genotype_forPub = dplyr::recode(Genotype_forPub, `V1482Afs/+` = "EOfAD-like/+"))
+                  ) %>% 
     mutate(lib.size = lib.size/1e6) %>% 
     ggplot(aes(x = PC1, y = lib.size, colour = Genotype_forPub, shape = Sex)) +
     geom_point(size = 4) +
