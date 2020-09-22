@@ -1,0 +1,224 @@
+---
+title: "Simulated dataset for harmonic mean p"
+date: "15/05/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+# Packages
+```{r packages, echo = T, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(magrittr)
+library(limma)
+library(edgeR)
+library(fgsea)
+library(harmonicmeanp)
+library(RUVSeq)
+library(pander)
+```
+
+# Introduction
+
+In the main analysis, we used the harmonic mean p value (HMP) to combine p-values from each method of GSEA (fry, camera and GSEA). The HMP method does push the resulting p-value towards smaller values. Therefore, we want to compare these results to a simulated (random) dataset to ensure that what we are seeing in the main paper is not due to chance. 
+
+Here, I will permute the geneIDs of the original dataset, perform the fry, camera and fgsea gene set testing, then combine the p-values from each gene set test as I did in the main paper. This will be performed 100 times. 
+
+If significant gene sets come up in any of the simulated datasets, then we  have a problem with this method. If not, random gene expression values does not result in significant changes to expression of gene sets using the HMP method and supports its use. 
+
+```{r readinData}
+geneDGE <- readRDS(here::here("/R_objects/geneDGE_TMM_filteredlowly_RUVk1.rds"))
+
+design_RUVk1 <- 
+  model.matrix(~Genotype + Sex + Tank + W_1, data = geneDGE$samples) %>% 
+  set_colnames(gsub("Genotype", "", colnames(.)))
+
+ranks_fgseaRUVk1 <- readRDS(here::here("/R_objects/ranksRUVSeq.rds"))
+
+## Read in gene sets 
+# need the zf2human gene mapping file from my W1818x RNA-seq analysis
+zf2humangeneMapping <-  read_delim("gene_sets/zf2human_entrez.txt",delim =  ",") %>% 
+	set_colnames(c("hu_gene_id", "hu_gene_name", "Entrez", "gene_id", "gene_name"))
+
+# import KEGG gene sets
+KEGG <- gmtPathways("gene_sets/c2.cp.kegg.v7.1.entrez.gmt")
+
+KEGG %<>% 	
+  lapply(function(x){
+    zf2humangeneMapping %>%
+      dplyr::filter(Entrez %in% x, 
+                    gene_id %in% rownames(geneDGE)) %>%
+      .[["gene_id"]] %>% 
+  		unique()
+  })
+
+KEGG_sizes <- KEGG %>% 
+  lapply(length) %>% 
+  unlist %>% 
+  as.data.frame() %>% 
+  set_colnames( "n_genes") %>% 
+  rownames_to_column("pathway")
+
+# retain gene sets with at least 10 genes in it
+KEGG <- KEGG[KEGG_sizes %>% dplyr::filter(n_genes > 10) %>% .$pathway]
+
+# Hallmark gene sets
+
+hallmark <- gmtPathways("gene_sets/h.all.v7.1.entrez.gmt") %>%
+  lapply(function(x){
+    zf2humangeneMapping %>%
+      dplyr::filter(Entrez %in% x, 
+                   gene_id %in% rownames(geneDGE)) %>%
+      .[["gene_id"]]
+  })
+
+zebrafishIreGenes <- readRDS("gene_sets/zebrafishIreGenes.rds")
+```
+
+The `sample()` command will be used to randomise the data row-wise. Then the `replicate()` function to perform the permutations 100 times. 
+
+```{r runSim}
+# simulation 100 times  -------------------------------------------------
+simulatedHMP <- replicate(n = 100, 
+          expr = cpm(geneDGE$counts) %>% 
+            (function(x){
+              randomisedCounts <- x[sample(nrow(cpm(geneDGE$counts))),]  
+              
+              # conversion tibble
+              newgeneID_2_oldgeneID <- rownames(randomisedCounts) %>% 
+                as_tibble() %>% 
+                cbind(rownames(geneDGE)) %>% 
+                set_colnames(c("randomID", "oldID"))
+              
+              # perform fry as I did in the main analysis
+              fryRes_RUVk1_kg_Random <- 
+                design_RUVk1 %>% colnames() %>% .[2:4] %>% 
+                sapply(function(x) {
+                  randomisedCounts %>% 
+                    cpm(log = TRUE) %>% 
+                    fry(
+                      index = c(KEGG, hallmark, zebrafishIreGenes),
+                      design = design_RUVk1, 
+                      contrast = x, 
+                      sort = "directional"
+                    ) %>% 
+                    rownames_to_column("pathway") %>% 
+                    as_tibble() %>% 
+                    mutate(coef = x, 
+                           sig = FDR < 0.05 | FDR.Mixed < 0.05, 
+                           p_bonf = p.adjust(PValue, "bonf"))
+                }, simplify = FALSE)
+              
+              # perform camera as I did in the main analysis
+              camera_res_KEGG_RUVk1_random <- 
+                design_RUVk1 %>% colnames() %>% .[2:4] %>% 
+                sapply(function(x) {
+                  randomisedCounts %>% 
+                    cpm(log = TRUE) %>% 
+                    camera(
+                      index = c(KEGG, hallmark, zebrafishIreGenes),
+                      design = design_RUVk1, 
+                      contrast = x, 
+                      inter.gene.cor = NA, 
+                      sort = TRUE
+                    ) %>% 
+                    rownames_to_column("pathway") %>% 
+                    as_tibble() %>% 
+                    mutate(coef = x)
+                }, simplify = FALSE)
+              
+              # randomise the ranked list to match the input in randomcounts
+              ranks_RUV_random <- ranks_fgseaRUVk1 %>% 
+                lapply(function(x){
+                  x %>% 
+                    as.data.frame() %>% 
+                    rownames_to_column("oldID") %>% 
+                    left_join(newgeneID_2_oldgeneID) %>% 
+                    dplyr::rename(rankstat = ".") %>% 
+                    dplyr::select(-oldID) %>% 
+                    with(structure(rankstat, names = randomID))
+                })
+              
+              # perform fgsea
+              set.seed(33)
+              fgseaRes_RUVk1_kg_random<- ranks_RUV_random %>%
+                lapply(function(x){
+                  fgseaMultilevel(stats = x, pathways = c(KEGG, hallmark, zebrafishIreGenes)) %>%
+                    as_tibble() %>%
+                    dplyr::rename(FDR = padj) %>%
+                    mutate(padj = p.adjust(pval, "bonferroni")) %>%
+                    dplyr::select(pathway, pval, FDR, padj, everything()) %>%
+                    arrange(pval) %>%
+                    mutate(sig = padj < 0.05)
+                })
+              # add the coef columns
+              fgseaRes_RUVk1_kg_random$`R122Pfs/+` %<>% 
+                mutate(coef = "R122Pfs/+")
+              fgseaRes_RUVk1_kg_random$trans %<>% 
+                mutate(coef = "trans")
+              fgseaRes_RUVk1_kg_random$`V1482Afs/+` %<>% 
+                mutate(coef = "V1482Afs/+")
+              
+              # make the HMP
+              harmonicmeanp_random <- fryRes_RUVk1_kg_Random %>% 
+                bind_rows() %>% 
+                dplyr::select(pathway, PValue.Mixed, FDR.Mixed, coef) %>% 
+                dplyr::rename(fry_p = PValue.Mixed) %>% 
+                left_join(camera_res_KEGG_RUVk1_random %>% 
+                            bind_rows() %>% 
+                            dplyr::select(pathway, PValue, FDR, coef), 
+                          by = c("pathway", "coef")) %>% 
+                dplyr::rename(camera_p = PValue) %>% 
+                left_join(fgseaRes_RUVk1_kg_random %>% 
+                            bind_rows() %>% 
+                            dplyr::select(pathway, pval,c(FDR.fgsea = FDR), coef), 
+                          by = c("pathway", "coef")) %>% 
+                dplyr::rename(fgsea_p = pval) %>% 
+                bind_rows() %>% 
+                nest(p = one_of(c("fry_p", "camera_p", "fgsea_p"))) %>% 
+                mutate(harmonic_p = vapply(p, function(x){
+                  x <- unlist(x)
+                  x <- x[!is.na(x)]
+                  p.hmp(x, L = 4)
+                }, numeric(1))
+                ) %>% 
+                unnest() %>% 
+                mutate(harmonic_p_FDR = p.adjust(harmonic_p, "fdr"),
+                       sig = harmonic_p_FDR < 0.05)
+              # print results
+              tibble(
+                sig_in_fry = nrow(harmonicmeanp_random %>% dplyr::filter(FDR.Mixed < 0.05)), 
+                sig_in_camera = nrow(harmonicmeanp_random %>% dplyr::filter(FDR < 0.05)), 
+                sig_in_fgsea = nrow(harmonicmeanp_random %>% dplyr::filter(FDR.fgsea < 0.05)), 
+                sig_in_HMP = nrow(harmonicmeanp_random %>% dplyr::filter(harmonic_p_FDR < 0.05))
+              )
+            }), simplify = FALSE
+)
+```
+
+# Results
+
+In all permutations of the simulated dataset, no gene sets came up as significantly altered by any of the algorithms individually, or by the HMP (after FDR adjustment). Therefore, this supports the use of the HMP to combine significance values from gene set testing using multiple algorithms. 
+
+```{r res}
+simulatedHMP %>% 
+  bind_rows() %>% 
+  summary() %>% 
+  pander()
+```
+
+# Session info
+```{r}
+sessionInfo() %>% 
+  pander()
+```
+
+
+
+
