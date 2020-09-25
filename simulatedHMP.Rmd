@@ -28,7 +28,7 @@ library(pander)
 
 In the main analysis, we used the harmonic mean p-value (HMP) to combine p-values from each method of GSEA (fry, camera and GSEA). The HMP method does push the resulting p-value towards smaller values. Therefore, we want to compare these results to a simulated (random) dataset to ensure that what we are seeing in the main paper is not due to chance. 
 
-Here, I will permute the geneIDs of the original dataset, perform the fry, camera and fgsea gene set testing, then combine the p-values from each gene set test as I did in the main paper. This will be performed 100 times. 
+Here, I will permute the geneIDs of the original dataset, then perform the fry, camera and fgsea gene set testing, then combine the p-values from each gene set test as I did in the main paper. This will be performed 100 times. 
 
 If significant gene sets come up in any of the simulated datasets, then we  have a problem with this method. If not, random gene expression values does not result in significant changes to expression of gene sets using the HMP method and supports its use. 
 
